@@ -9,6 +9,7 @@ import (
 	"github.com/tealeg/xlsx"
 	"path"
 	"strconv"
+	"time"
 )
 
 // Excel 结构体
@@ -294,10 +295,11 @@ func (e *ExcelUp) ImportExcel() (err error) {
 			}
 			oneRow := &exceldata.ExcelRow{}
 			for cellIndex, cell := range row.Cells {
-				oneCel := &exceldata.ExcelCell{
-					Value: cell.String(),
-				}
 				hkInfo, h := sheetIndexMap[cellIndex+1]
+				val := e._checkDateValue(cell.String(), cell.NumFmt, hkInfo.FiledType)
+				oneCel := &exceldata.ExcelCell{
+					Value: val,
+				}
 				if h {
 					oneCel.Key = hkInfo.Key
 				} else {
@@ -350,6 +352,36 @@ func (e *ExcelUp) _initDataStyle() {
 		}
 		e.SheetRowCellStyleMap[sheetName] = oneSheetRowCellStyleMap
 	}
+}
+
+// 检测数据类型，时间类型转换为YYYY-MM-DD HH:mm:ss
+func (e *ExcelUp) _checkDateValue(data string, numFmt string, fileType string) string {
+	val := ""
+	if fileType == "date" || fileType == "datetime" {
+		i, e := strconv.ParseFloat(data, 64)
+		if e != nil {
+			val = data
+		}
+		day := int(i)
+		compensationDay := 1
+		if day > 60 {
+			// excel bug 1900年有2-29日，此日期不存在
+			compensationDay = 2
+		}
+		second := int((i-float64(day))*86400 + 0.5)
+		tm := time.Date(1900, 1, 1, 0, 0, 0, 0,
+			time.FixedZone("Asia/Shanghai", 0))
+		tm = tm.Add(time.Hour * 24 * time.Duration(day-compensationDay))
+		tm = tm.Add(time.Second * time.Duration(second))
+		if fileType == "date" {
+			val = tm.Format("2006-01-02")
+		} else {
+			val = tm.Format("2006-01-02 15:04:05")
+		}
+	} else {
+		val = data
+	}
+	return val
 }
 
 // 获取数据样式

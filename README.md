@@ -141,6 +141,7 @@ data := &exceldata.ExcelFile{}
 配置文件说明
 ---
 + 可配置信息在excelstyle/style.go下
++ 时间类型需要在header中配置filed_type 为 date或者datetime，否则会被解析成小数
 
 配置文件事例
 ---
