@@ -49,9 +49,10 @@ type SheetHeaderField struct {
 }
 
 type RowStyle struct {
-	RowNum int     `json:"row_num"` // 行数，-1奇数行，-2偶数行
-	Weight int     `json:"weight"`  // 权重，row，cell交叉时权重高的覆盖权重低的，同级配置内生效
-	Height float64 `json:"height"`  // 高度
+	RowNum    int             `json:"row_num"`    // 行数，-1奇数行，-2偶数行
+	Weight    int             `json:"weight"`     // 权重，row，cell交叉时权重高的覆盖权重低的，同级配置内生效
+	Height    float64         `json:"height"`     // 高度
+	CellStyle *CellStyleValue `json:"cell_style"` // 单元格样式
 }
 
 type CellStyle struct {
@@ -87,7 +88,7 @@ type StyleBorder struct {
 }
 
 type StyleFont struct {
-	Name      string `json:"name"`      // 字体名称
+	Name      string `json:"name"`      // 字体名称，必须设置字体名称字体才会生效
 	Bold      bool   `json:"bold"`      // 是否加粗
 	Charset   int    `json:"charset"`   // 字符集
 	Color     string `json:"color"`     // 字体颜色

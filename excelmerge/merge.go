@@ -7,23 +7,30 @@ import (
 	"github.com/caoshuyu/excelup/exceldata"
 	"github.com/caoshuyu/excelup/excelstyle"
 	"github.com/tealeg/xlsx"
+	"path"
 	"strconv"
 )
 
 // Excel 结构体
 type ExcelUp struct {
-	File          *xlsx.File
-	Style         *excelstyle.ExcelStyle
-	HeardKeyMap   map[string]*HeardKeyInfo
-	HeardNameMap  map[string]*HeardKeyInfo
-	HeardIndexMap map[int]*HeardKeyInfo
-	SheetData     []*exceldata.ExcelFile
+	File                 *xlsx.File
+	FileName             string
+	Style                *excelstyle.ExcelStyle
+	HeardKeyMap          map[string]map[string]*HeardKeyInfo
+	HeardNameMap         map[string]map[string]*HeardKeyInfo
+	HeardIndexMap        map[string]map[int]*HeardKeyInfo
+	HeardHigh            map[string]int
+	DataStartLine        map[string]int
+	SheetData            *exceldata.ExcelFile
+	SheetRowStyleMap     map[string]map[int]*excelstyle.RowStyle
+	SheetCellStyleMap    map[string]map[int]*excelstyle.CellStyle
+	SheetRowCellStyleMap map[string]map[string]*excelstyle.RowCellStyle
 }
 
 type HeardKeyInfo struct {
 	Name             string // 字段名
 	Key              string // 字段key
-	Index            int    // 字段所在cell位置
+	Index            int    // 字段所在cell位置,从1开始
 	FiledType        string // 字段类型
 	AdSameValueMerge bool   // 类似字段合并
 }
@@ -32,9 +39,14 @@ func GetExcelUp() *ExcelUp {
 	eUp := &ExcelUp{}
 	eUp.File = xlsx.NewFile()
 	eUp.Style = new(excelstyle.ExcelStyle)
-	eUp.HeardKeyMap = make(map[string]*HeardKeyInfo)
-	eUp.HeardNameMap = make(map[string]*HeardKeyInfo)
-	eUp.HeardIndexMap = make(map[int]*HeardKeyInfo)
+	eUp.HeardKeyMap = make(map[string]map[string]*HeardKeyInfo)
+	eUp.HeardNameMap = make(map[string]map[string]*HeardKeyInfo)
+	eUp.HeardIndexMap = make(map[string]map[int]*HeardKeyInfo)
+	eUp.HeardHigh = make(map[string]int)
+	eUp.DataStartLine = make(map[string]int)
+	eUp.SheetRowStyleMap = make(map[string]map[int]*excelstyle.RowStyle)
+	eUp.SheetCellStyleMap = make(map[string]map[int]*excelstyle.CellStyle)
+	eUp.SheetRowCellStyleMap = make(map[string]map[string]*excelstyle.RowCellStyle)
 
 	return eUp
 }
@@ -64,8 +76,19 @@ func (e *ExcelUp) SaveFile(filePath string) (err error) {
 	return e.File.Save(filePath)
 }
 
-// 合并头信息
-func (e *ExcelUp) MergeHeader() (err error) {
+// 读取文件
+func (e *ExcelUp) GetFile(filePath string) (err error) {
+	e.FileName = path.Base(filePath)
+	file, err := xlsx.OpenFile(filePath)
+	if nil != err {
+		return
+	}
+	e.File = file
+	return nil
+}
+
+// 初始化头信息
+func (e *ExcelUp) InitHeader() (err error) {
 	// 计算头信息
 	if e.File == nil {
 		return errors.New("excel file nil")
@@ -83,6 +106,7 @@ func (e *ExcelUp) MergeHeader() (err error) {
 		if maxRowNum == 0 || maxCellNum == 0 {
 			continue
 		}
+		e.HeardHigh[sheetStyle.SheetName] = maxRowNum
 		// 生成头部信息
 		fileSheet, h := e.File.Sheet[sheetStyle.SheetName]
 		if !h {
@@ -99,6 +123,8 @@ func (e *ExcelUp) MergeHeader() (err error) {
 				fileSheet.AddRow()
 			}
 		}
+		e.DataStartLine[sheetStyle.SheetName] = maxRowNum + emptyRow
+
 		// 构建数据存储集合
 		for i := 0; i < maxRowNum; i++ {
 			row := fileSheet.AddRow()
@@ -110,9 +136,9 @@ func (e *ExcelUp) MergeHeader() (err error) {
 		cellIndex := 1
 		for k := range sheetStyle.SheetHeader.HeaderFields {
 			if len(sheetStyle.SheetHeader.HeaderFields[k].Children) > 0 {
-				cellIndex = e._getChildKey(sheetStyle.SheetHeader.HeaderFields[k].Children, cellIndex)
+				cellIndex = e._getChildKey(sheetStyle.SheetName, sheetStyle.SheetHeader.HeaderFields[k].Children, cellIndex)
 			} else {
-				e._setHeardKeyInfo(sheetStyle.SheetHeader.HeaderFields[k], cellIndex)
+				e._setHeardKeyInfo(sheetStyle.SheetName, sheetStyle.SheetHeader.HeaderFields[k], cellIndex)
 				cellIndex++
 			}
 		}
@@ -165,6 +191,243 @@ func (e *ExcelUp) MergeHeader() (err error) {
 	return nil
 }
 
+// 生成Excel文件
+func (e *ExcelUp) ExportExcel() (err error) {
+	// 生成sheet文件头
+	if err = e.InitHeader(); err != nil {
+		return err
+	}
+	if e.SheetData == nil {
+		return
+	}
+	// 初始数据样式化配置信息
+	e._initDataStyle()
+
+	// 写入数据
+	for _, sheet := range e.SheetData.SheetList {
+		sheetName := sheet.SheetName
+		oneSheet := e.File.Sheet[sheetName]
+		if oneSheet == nil {
+			oneSheet, err = e.File.AddSheet(sheetName)
+			if err != nil {
+				return err
+			}
+		}
+		sheetKeyMap := e.HeardKeyMap[sheetName]
+
+		for rowNum, rowData := range sheet.RowList {
+			useRowNum := e.DataStartLine[sheetName] + rowNum + 1
+			oneRow := oneSheet.AddRow()
+			maxCellNum := 0
+			for cellI, cellVal := range rowData.CellList {
+				if len(cellVal.Key) > 0 {
+					if hkInfo, h := sheetKeyMap[cellVal.Key]; h {
+						if hkInfo.Index > maxCellNum {
+							maxCellNum = hkInfo.Index
+						}
+					} else {
+						if cellI+1 > maxCellNum {
+							maxCellNum = cellI + 1
+						}
+					}
+				}
+			}
+			// 创建cell map
+			cellMap := make(map[int]*xlsx.Cell)
+			for i := 1; i <= maxCellNum; i++ {
+				cellMap[i] = oneRow.AddCell()
+			}
+			for cellNum, cellData := range rowData.CellList {
+				useCellNum := cellNum + 1
+				if len(cellData.Key) > 0 {
+					if sheetKey, h := sheetKeyMap[cellData.Key]; h {
+						useCellNum = sheetKey.Index
+					}
+				}
+				cell := cellMap[useCellNum]
+				if cell == nil {
+					// 未在key初始化字段加到行尾
+					cell = oneRow.AddCell()
+				}
+				cell.SetValue(cellData.Value)
+				// 获取样式
+				style := e._getDataStyle(sheetName, useRowNum, useCellNum)
+				if style != nil {
+					e._setRowCellStyle(cell, style)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// 导入Excel
+func (e *ExcelUp) ImportExcel() (err error) {
+	// 生成sheet文件头
+	if err = e.InitHeader(); err != nil {
+		return err
+	}
+	// 解析数据
+	sheetList := make([]*exceldata.ExcelSheet, 0)
+	for _, sheet := range e.File.Sheets {
+		sheetName := sheet.Name
+		startLine := e.DataStartLine[sheetName] // 下标
+		sheetIndexMap := e.HeardIndexMap[sheetName]
+
+		oneSheet := &exceldata.ExcelSheet{
+			SheetName: sheet.Name,
+		}
+		for index, row := range sheet.Rows {
+			if index < startLine {
+				continue
+			}
+			// 判别是否是空行
+			isEmptyRow := true
+			for _, cell := range row.Cells {
+				if len(cell.Value) > 0 {
+					isEmptyRow = false
+					break
+				}
+			}
+			if isEmptyRow {
+				continue
+			}
+			oneRow := &exceldata.ExcelRow{}
+			for cellIndex, cell := range row.Cells {
+				oneCel := &exceldata.ExcelCell{
+					Value: cell.String(),
+				}
+				hkInfo, h := sheetIndexMap[cellIndex+1]
+				if h {
+					oneCel.Key = hkInfo.Key
+				} else {
+					oneCel.Key = strconv.Itoa(cellIndex + 1)
+				}
+				oneRow.CellList = append(oneRow.CellList, oneCel)
+			}
+			if oneRow.CellList == nil {
+				continue
+			}
+			oneSheet.RowList = append(oneSheet.RowList, oneRow)
+		}
+		sheetList = append(sheetList, oneSheet)
+	}
+	e.SheetData = &exceldata.ExcelFile{
+		FileName:  e.FileName,
+		SheetList: sheetList,
+	}
+	return nil
+}
+
+func (e *ExcelUp) _initDataStyle() {
+	for _, sheetStyle := range e.Style.SheetStyle {
+		sheetName := sheetStyle.SheetName
+		oneSheetRowStyleMap, h := e.SheetRowStyleMap[sheetName]
+		if !h {
+			oneSheetRowStyleMap = make(map[int]*excelstyle.RowStyle)
+		}
+		for k, sheetRow := range sheetStyle.SheetRows {
+			oneSheetRowStyleMap[sheetRow.RowNum] = sheetStyle.SheetRows[k]
+		}
+		e.SheetRowStyleMap[sheetName] = oneSheetRowStyleMap
+
+		oneSheetCellStyleMap, h := e.SheetCellStyleMap[sheetName]
+		if !h {
+			oneSheetCellStyleMap = make(map[int]*excelstyle.CellStyle)
+		}
+		for k, sheetCell := range sheetStyle.SheetCells {
+			oneSheetCellStyleMap[sheetCell.CellNum] = sheetStyle.SheetCells[k]
+		}
+		e.SheetCellStyleMap[sheetName] = oneSheetCellStyleMap
+
+		oneSheetRowCellStyleMap, h := e.SheetRowCellStyleMap[sheetName]
+		if !h {
+			oneSheetRowCellStyleMap = make(map[string]*excelstyle.RowCellStyle)
+		}
+		for k, rowCell := range sheetStyle.SheetRowCell {
+			key := strconv.Itoa(rowCell.RowNum) + "_" + strconv.Itoa(rowCell.CellNum)
+			oneSheetRowCellStyleMap[key] = sheetStyle.SheetRowCell[k]
+		}
+		e.SheetRowCellStyleMap[sheetName] = oneSheetRowCellStyleMap
+	}
+}
+
+// 获取数据样式
+func (e *ExcelUp) _getDataStyle(sheetName string, rowNum, cellNum int) *excelstyle.CellStyleValue {
+	rowParity := -1  // 行奇偶
+	cellParity := -1 // 列奇偶
+	if rowNum%2 == 0 {
+		rowParity = -2
+	}
+	if cellNum%2 == 0 {
+		cellParity = -2
+	}
+	// 获取 row cell 样式
+	if sheetStyleMap, h := e.SheetRowCellStyleMap[sheetName]; h {
+		// row ,cell 值
+		rowCellKey := strconv.Itoa(rowNum) + "_" + strconv.Itoa(cellNum)
+		if style, h := sheetStyleMap[rowCellKey]; h {
+			return style.CellStyle
+		}
+		// row 值 , cell 范围
+		rowCellKey = strconv.Itoa(rowNum) + "_" + strconv.Itoa(cellParity)
+		if style, h := sheetStyleMap[rowCellKey]; h {
+			return style.CellStyle
+		}
+		// row 范围 , cell 值
+		rowCellKey = strconv.Itoa(rowParity) + "_" + strconv.Itoa(cellNum)
+		if style, h := sheetStyleMap[rowCellKey]; h {
+			return style.CellStyle
+		}
+		// row 范围 , cell 范围
+		rowCellKey = strconv.Itoa(rowParity) + "_" + strconv.Itoa(cellParity)
+		if style, h := sheetStyleMap[rowCellKey]; h {
+			return style.CellStyle
+		}
+	}
+
+	var styleValue *excelstyle.CellStyleValue
+	var wight int
+	// row / cell 获取数据比权重决定
+	// 获取 row 样式
+	if sheetStyleMap, h := e.SheetRowStyleMap[sheetName]; h {
+		// row 值
+		if style, h := sheetStyleMap[rowNum]; h {
+			if style.Weight > wight {
+				styleValue = style.CellStyle
+				wight = style.Weight
+			}
+		} else {
+			// row 范围
+			if style, h = sheetStyleMap[rowParity]; h {
+				if style.Weight > wight {
+					styleValue = style.CellStyle
+					wight = style.Weight
+				}
+			}
+		}
+	}
+	// 获取 cell 样式
+	if sheetStyleMap, h := e.SheetCellStyleMap[sheetName]; h {
+		if style, h := sheetStyleMap[cellNum]; h {
+			// cell 值
+			if style.Weight > wight {
+				styleValue = style.CellStyle
+				wight = style.Weight
+			}
+		} else {
+			// cell 范围
+			if style, h := sheetStyleMap[cellParity]; h {
+				if style.Weight > wight {
+					styleValue = style.CellStyle
+					wight = style.Weight
+				}
+			}
+		}
+	}
+	return styleValue
+}
+
 func (e *ExcelUp) _setChildHeard(nowRow, nowCell int, cellMap map[string]*xlsx.Cell, children []*excelstyle.SheetHeaderField) int {
 	moveCell := 0
 	useCellNo := nowCell
@@ -205,19 +468,19 @@ func (e *ExcelUp) _setChildHeard(nowRow, nowCell int, cellMap map[string]*xlsx.C
 	return moveCell
 }
 
-func (e *ExcelUp) _getChildKey(children []*excelstyle.SheetHeaderField, cellIndex int) (newCellIndex int) {
+func (e *ExcelUp) _getChildKey(sheetName string, children []*excelstyle.SheetHeaderField, cellIndex int) (newCellIndex int) {
 	for childK := range children {
 		if len(children[childK].Children) > 0 {
-			cellIndex = e._getChildKey(children[childK].Children, cellIndex)
+			cellIndex = e._getChildKey(sheetName, children[childK].Children, cellIndex)
 		} else {
-			e._setHeardKeyInfo(children[childK], cellIndex)
+			e._setHeardKeyInfo(sheetName, children[childK], cellIndex)
 			cellIndex++
 		}
 	}
 	return cellIndex
 }
 
-func (e *ExcelUp) _setHeardKeyInfo(headerFields *excelstyle.SheetHeaderField, cellIndex int) {
+func (e *ExcelUp) _setHeardKeyInfo(sheetName string, headerFields *excelstyle.SheetHeaderField, cellIndex int) {
 	hkInfo := &HeardKeyInfo{}
 	if len(headerFields.Key) > 0 && len(headerFields.Name) > 0 {
 		hkInfo.Name = headerFields.Name
@@ -242,10 +505,24 @@ func (e *ExcelUp) _setHeardKeyInfo(headerFields *excelstyle.SheetHeaderField, ce
 		hkInfo.FiledType = "nil"
 	}
 	hkInfo.AdSameValueMerge = headerFields.AdSameValueMerge
-
-	e.HeardKeyMap[hkInfo.Key] = hkInfo
-	e.HeardNameMap[hkInfo.Name] = hkInfo
-	e.HeardIndexMap[hkInfo.Index] = hkInfo
+	keyMap, h := e.HeardKeyMap[sheetName]
+	if !h {
+		keyMap = make(map[string]*HeardKeyInfo)
+	}
+	keyMap[hkInfo.Key] = hkInfo
+	e.HeardKeyMap[sheetName] = keyMap
+	NameMap, h := e.HeardNameMap[sheetName]
+	if !h {
+		NameMap = make(map[string]*HeardKeyInfo)
+	}
+	NameMap[hkInfo.Name] = hkInfo
+	e.HeardNameMap[sheetName] = NameMap
+	indexMap, h := e.HeardIndexMap[sheetName]
+	if !h {
+		indexMap = make(map[int]*HeardKeyInfo)
+	}
+	indexMap[hkInfo.Index] = hkInfo
+	e.HeardIndexMap[sheetName] = indexMap
 }
 
 func (e *ExcelUp) _calculateHeaderRowCellNum(sheetStyle *excelstyle.ExcelSheetStyle) (maxRowNum, maxCellNum int) {
