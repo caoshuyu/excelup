@@ -231,6 +231,10 @@ func (e *ExcelUp) ExportExcel() (err error) {
 							maxCellNum = cellI + 1
 						}
 					}
+				} else {
+					if cellI+1 > maxCellNum {
+						maxCellNum = cellI + 1
+					}
 				}
 			}
 			// 创建cell map

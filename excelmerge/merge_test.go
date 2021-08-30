@@ -41,57 +41,95 @@ func TestExcelUp_ExportExcel(t *testing.T) {
 	row2 := &exceldata.ExcelRow{}
 
 	cellList := make([]*exceldata.ExcelCell, 0)
+	//cellList = append(cellList,
+	//	&exceldata.ExcelCell{
+	//		Key:   "class",
+	//		Value: "一班",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "name",
+	//		Value: "王五",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "age",
+	//		Value: "10",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "chinese",
+	//		Value: "80",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "mathematics",
+	//		Value: "90",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "english",
+	//		Value: "80",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "physical",
+	//		Value: "99",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "biological",
+	//		Value: "100",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "chemical",
+	//		Value: "80",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "geographic",
+	//		Value: "90",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "history",
+	//		Value: "70",
+	//	},
+	//	&exceldata.ExcelCell{
+	//		Key:   "political",
+	//		Value: "60",
+	//	},
+	//)
+
 	cellList = append(cellList,
 		&exceldata.ExcelCell{
-			Key:   "class",
 			Value: "一班",
 		},
 		&exceldata.ExcelCell{
-			Key:   "name",
 			Value: "王五",
 		},
 		&exceldata.ExcelCell{
-			Key:   "age",
 			Value: "10",
 		},
 		&exceldata.ExcelCell{
-			Key:   "chinese",
 			Value: "80",
 		},
 		&exceldata.ExcelCell{
-			Key:   "mathematics",
 			Value: "90",
 		},
 		&exceldata.ExcelCell{
-			Key:   "english",
 			Value: "80",
 		},
 		&exceldata.ExcelCell{
-			Key:   "physical",
 			Value: "99",
 		},
 		&exceldata.ExcelCell{
-			Key:   "biological",
 			Value: "100",
 		},
 		&exceldata.ExcelCell{
-			Key:   "chemical",
 			Value: "80",
 		},
 		&exceldata.ExcelCell{
-			Key:   "geographic",
 			Value: "90",
 		},
 		&exceldata.ExcelCell{
-			Key:   "history",
 			Value: "70",
 		},
 		&exceldata.ExcelCell{
-			Key:   "political",
 			Value: "60",
 		},
 	)
-
 	row1.CellList = cellList
 	row2.CellList = cellList
 	oneSheet.RowList = append(oneSheet.RowList, row1, row2)
