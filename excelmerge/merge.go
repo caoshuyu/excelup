@@ -204,6 +204,13 @@ func (e *ExcelUp) ExportExcel() (err error) {
 	// 初始数据样式化配置信息
 	e._initDataStyle()
 
+	if e.SheetData == nil || len(e.SheetData.SheetList) == 0 {
+		return nil
+	}
+	if e.File == nil {
+		e.File = new(xlsx.File)
+	}
+
 	// 写入数据
 	for _, sheet := range e.SheetData.SheetList {
 		sheetName := sheet.SheetName
@@ -274,6 +281,9 @@ func (e *ExcelUp) ImportExcel() (err error) {
 	}
 	// 解析数据
 	sheetList := make([]*exceldata.ExcelSheet, 0)
+	if e.File == nil {
+		e.File = new(xlsx.File)
+	}
 	for _, sheet := range e.File.Sheets {
 		sheetName := sheet.Name
 		startLine := e.DataStartLine[sheetName] // 下标
@@ -326,6 +336,9 @@ func (e *ExcelUp) ImportExcel() (err error) {
 }
 
 func (e *ExcelUp) _initDataStyle() {
+	if e.Style == nil {
+		return
+	}
 	for _, sheetStyle := range e.Style.SheetStyle {
 		sheetName := sheetStyle.SheetName
 		oneSheetRowStyleMap, h := e.SheetRowStyleMap[sheetName]
@@ -517,6 +530,9 @@ func (e *ExcelUp) _getChildKey(sheetName string, children []*excelstyle.SheetHea
 }
 
 func (e *ExcelUp) _setHeardKeyInfo(sheetName string, headerFields *excelstyle.SheetHeaderField, cellIndex int) {
+	if headerFields == nil {
+		return
+	}
 	hkInfo := &HeardKeyInfo{}
 	if len(headerFields.Key) > 0 && len(headerFields.Name) > 0 {
 		hkInfo.Name = headerFields.Name
@@ -562,6 +578,9 @@ func (e *ExcelUp) _setHeardKeyInfo(sheetName string, headerFields *excelstyle.Sh
 }
 
 func (e *ExcelUp) _calculateHeaderRowCellNum(sheetStyle *excelstyle.ExcelSheetStyle) (maxRowNum, maxCellNum int) {
+	if sheetStyle == nil || sheetStyle.SheetHeader == nil {
+		return 0, 0
+	}
 	for _, headerFields := range sheetStyle.SheetHeader.HeaderFields {
 		childRow, childCell := 0, 0
 		if len(headerFields.Children) > 0 {
@@ -596,6 +615,9 @@ func (e *ExcelUp) _calculateHeaderRowCellNum(sheetStyle *excelstyle.ExcelSheetSt
 func (e *ExcelUp) _calculateHeaderRowCellNumChildren(headerFields *excelstyle.SheetHeaderField, maxRowNum, maxCellNum int) (int, int) {
 	childRow := 0
 	childCell := 0
+	if headerFields == nil {
+		return childRow, childCell
+	}
 	for _, child := range headerFields.Children {
 		if len(child.Children) > 0 {
 			newRow, newCell := e._calculateHeaderRowCellNumChildren(child, maxRowNum, maxCellNum)
@@ -622,6 +644,9 @@ func (e *ExcelUp) _calculateHeaderRowCellNumChildren(headerFields *excelstyle.Sh
 
 func (e *ExcelUp) _setRowCellStyle(cell *xlsx.Cell, cellStyle *excelstyle.CellStyleValue) {
 	style := new(xlsx.Style)
+	if cellStyle == nil {
+		return
+	}
 	if cellStyle.Border != nil {
 		if cellStyle.Border.Bottom != 0 {
 			style.Border.Bottom = excelstyle.GetLinearName(cellStyle.Border.Bottom)
