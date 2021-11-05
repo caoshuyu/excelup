@@ -287,8 +287,10 @@ func (e *ExcelUp) ImportExcel() (err error) {
 	for _, sheet := range e.File.Sheets {
 		sheetName := sheet.Name
 		startLine := e.DataStartLine[sheetName] // 下标
-		sheetIndexMap := e.HeardIndexMap[sheetName]
-
+		sheetIndexMap, h := e.HeardIndexMap[sheetName]
+		if !h {
+			continue
+		}
 		oneSheet := &exceldata.ExcelSheet{
 			SheetName: sheet.Name,
 		}
@@ -310,6 +312,9 @@ func (e *ExcelUp) ImportExcel() (err error) {
 			oneRow := &exceldata.ExcelRow{}
 			for cellIndex, cell := range row.Cells {
 				hkInfo, h := sheetIndexMap[cellIndex+1]
+				if !h {
+					continue
+				}
 				val := e._checkDateValue(cell.String(), cell.NumFmt, hkInfo.FiledType)
 				oneCel := &exceldata.ExcelCell{
 					Value: val,
